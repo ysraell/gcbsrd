@@ -8,6 +8,9 @@ clc
 K = 85;
 % m nearest neighbors (eq. (4), m = M)
 M = round(K/4);
+%sigma_s is the spatial distance weighting (eq. (7))
+sigma_s = 0.4;
+
 
 img = imread('Imgs/818.jpg');
 
@@ -47,14 +50,14 @@ for l=1:K
 end
 
 SI = reshape(Sc(idx),ll,cc); 
-figure;
-title('Without Color space Smoothing')
-imagesc(SI)
-colormap(gray)
+% figure;
+% title('Without Color space Smoothing')
+% imagesc(SI)
+% colormap(gray)
 
 % To achive the m nearest color, first we most know the all distances.
-Dlab = nan(K,K);
-idm = nan(M,K);
+Dlab = zeros(K,K);
+idm = zeros(M,K);
 T = zeros(K,1);
 Lab = [L_cie a_cie b_cie];
 %the loops bellow is not the smartest way, but I'm feel so lazy.
@@ -84,10 +87,12 @@ end
 
 
 SI = reshape(Sc2(idx),ll,cc); 
-figure;
-title('With Color space Smoothing')
-imagesc(SI)
-colormap(gray)
+
+% figure;
+% title('With Color space Smoothing')
+% imagesc(SI)
+% colormap(gray)
+
 SInorm = normalizar(SI);
 addpath ./coherenceFilter
 
@@ -118,15 +123,155 @@ Options.verbose = 'none';
 %Smap = CoherenceFilter(SInorm,Options);
 Smap = CoherenceFilter(SInorm,struct('T',5,'rho',.5,'Scheme','R','verbose','none'));
 
-figure;
-title('After a coherence filter.')
-imagesc(Smap)
-colormap(gray)
+% figure;
+% title('After a coherence filter.')
+% imagesc(Smap)
+% colormap(gray)
 
 addpath ./segment
 %usage: ./segment sigma k min input(ppm) output(ppm)
 %  sigma = 0.5, K = 500, min = 50.
 imwrite(Smap,'Smap.ppm')
+system('./segment/segment 1 1000 100 Smap.ppm Smap_seg.ppm');
 
-system('segment 0.5 600 60 Smap.ppm Smap_seg.ppm'
+Smap_seg = rgb2gray(imread('Smap_seg.ppm'));
+% 
+% figure;
+% title('After graph segmentation.')
+% imagesc(Smap_seg)
+% colormap(gray)
 
+
+values_r = unique(Smap_seg);
+T_r = size(values_r,1);
+hist_seg = hist(double(Smap_seg(:)),T_r);
+
+% To implement Dr (eq. (6) it is important to get a bin frame by region
+Segs = uint8(zeros(ll,cc,T_r));
+wr = zeros(T_r,1);
+for r=1:T_r
+    Segs(:,:,r) = uint8(Smap_seg==values_r(r));
+    wr(r) = sum(sum(Segs(:,:,r)));
+%     
+%     B = bwboundaries(255-Segs(:,:,r).*255);
+%     
+%     pause
+%     figure;
+%     title('After graph segmentation.')
+%     hold on
+%     imagesc(255-Segs(:,:,r).*255)
+%     colormap(gray)
+%     for k = 1:length(B)
+%         boundary = B{k};
+%         plot(boundary(:,2), boundary(:,1), 'w', 'LineWidth', 2)
+%     end
+%     hold off
+    
+end
+
+% Calulating eq. (6)
+
+Dr = zeros(T_r,T_r);
+Ds =  Dr; %for eq. (7)
+IDX= reshape(idx,ll,cc);
+ws = zeros(T_r,1);
+for rk=1:T_r
+    for ri=rk:T_r
+        if ri~=rk
+        
+            % for Dr
+            rn =[ri rk];
+            N = zeros(2,1);
+            fcki = [];
+            idxn = [];
+            for r=1:2
+                Temp = double(Segs(:,:,rn(r))).*IDX;
+                temp = unique(Temp(:));
+                idxn{r} = temp(temp>0);
+                N(r) = size(idxn{r},1);
+                temp = hist(Temp(:),N(r))';
+                fcki{r} = temp./sum(temp);
+            end
+            
+            for n1=1:N(1)
+                for n2=1:N(2)
+                    Dr(rk,ri)=Dr(rk,ri)+ fcki{1}(n1)*fcki{2}(n2)*D(idxn{1}(n1),idxn{2}(n2));
+                end
+            end
+            
+            Dr(ri,rk) = Dr(rk,ri);
+            
+            
+            %for Ds
+            Cr = [];
+            for r=1:2
+                sl =0;
+                tl=0;
+                sc = 0;
+                tc =0;
+                for l=1:ll
+                    for c=1:cc
+                        sl=sl+l.*double(Segs(l,c,rn(r)));
+                        tl = tl+double(Segs(l,c,rn(r)));
+                        sc=sc+c.*double(Segs(l,c,rn(r)));
+                        tc = tc+double(Segs(l,c,rn(r)));
+                    end
+                end             
+                Cr{r} = [sl/tl sc/tc];
+            end
+            Ds(rk,ri) = norm(Cr{1}-Cr{2});
+            Ds(ri,rk) = Ds(rk,ri);
+            dk = norm((Cr{1}-[l/2 c/2])./[l c]);
+            ws(rk) = exp(-9*dk^2);
+            
+        end
+    end
+end
+
+
+% Calulating eq. (5)
+Sr = zeros(T_r,1);
+wr = wr./sum(wr);
+for rk=1:T_r
+    for ri=1:T_r
+        if ri~=rk
+            Sr(rk) = Sr(rk)+wr(ri)*Dr(rk,ri);
+        end
+    end
+end
+
+Result = zeros(ll,cc);
+for r=1:T_r
+    Result=Result+ double(Segs(:,:,r)).*floor(Sr(r));
+end
+
+
+figure;
+title('Eq. (5) S_rk')
+imagesc(Result)
+colormap(gray)
+
+
+%eq. (7)
+
+Sr = zeros(T_r,1);
+wr = wr./sum(wr);
+for rk=1:T_r
+    for ri=1:T_r
+        if ri~=rk
+            Sr(rk) = Sr(rk)+exp(-Ds(rk,ri)/)*wr(ri)*Dr(rk,ri);
+        end
+    end
+    Sr(rk) = ws(rk)*Sr(rk);
+end
+
+Result = zeros(ll,cc);
+for r=1:T_r
+    Result=Result+ double(Segs(:,:,r)).*floor(Sr(r));
+end
+
+
+figure;
+title('Eq. (5) S_rk')
+imagesc(Result)
+colormap(gray)
