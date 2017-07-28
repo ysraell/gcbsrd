@@ -11,6 +11,11 @@ M = round(K/4);
 %sigma_s is the spatial distance weighting (eq. (7))
 sigma_s = sqrt(0.4);
 
+% With segmentation from http://cs.brown.edu/~pff/segment/
+% command_srt = ['./segment/segment ' num2str(sigma_seg) num2str(K_seg) num2str(min_seg) 'Smap.ppm Smap_seg.ppm'];
+sigma_seg = 5; % choose sigma <5
+K_seg = 1000; % choose <1000
+min_seg = 100; %choose I dont know!
 
 img = imread('Imgs/818.jpg');
 
@@ -132,7 +137,8 @@ addpath ./segment
 %usage: ./segment sigma k min input(ppm) output(ppm)
 %  sigma = 0.5, K = 500, min = 50.
 imwrite(Smap,'Smap.ppm')
-system('./segment/segment 1 1000 100 Smap.ppm Smap_seg.ppm');
+command_srt = ['./segment/segment ' num2str(sigma_seg) ' ' num2str(K_seg) ' ' num2str(min_seg) ' ' 'Smap.ppm Smap_seg.ppm'];
+system(command_srt);
 
 Smap_seg = rgb2gray(imread('Smap_seg.ppm'));
 % 

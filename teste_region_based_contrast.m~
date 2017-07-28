@@ -9,7 +9,7 @@ K = 85;
 % m nearest neighbors (eq. (4), m = M)
 M = round(K/4);
 %sigma_s is the spatial distance weighting (eq. (7))
-sigma_s = 0.4;
+sigma_s = sqrt(0.4);
 
 
 img = imread('Imgs/818.jpg');
@@ -132,7 +132,8 @@ addpath ./segment
 %usage: ./segment sigma k min input(ppm) output(ppm)
 %  sigma = 0.5, K = 500, min = 50.
 imwrite(Smap,'Smap.ppm')
-system('./segment/segment 1 1000 100 Smap.ppm Smap_seg.ppm');
+command_srt = ['./segment/segment ' num2str(sigma_seg) num2str(K_seg) num2str(min_seg) 'Smap.ppm Smap_seg.ppm'];
+system(command_srt);
 
 Smap_seg = rgb2gray(imread('Smap_seg.ppm'));
 % 
@@ -180,7 +181,7 @@ for rk=1:T_r
         if ri~=rk
         
             % for Dr
-            rn =[ri rk];
+            rn =[rk ri];
             N = zeros(2,1);
             fcki = [];
             idxn = [];
@@ -259,7 +260,7 @@ wr = wr./sum(wr);
 for rk=1:T_r
     for ri=1:T_r
         if ri~=rk
-            Sr(rk) = Sr(rk)+exp(-Ds(rk,ri)/)*wr(ri)*Dr(rk,ri);
+            Sr(rk) = Sr(rk)+exp(-Ds(rk,ri)/(sigma_s^2))*wr(ri)*Dr(rk,ri);
         end
     end
     Sr(rk) = ws(rk)*Sr(rk);
@@ -272,6 +273,6 @@ end
 
 
 figure;
-title('Eq. (5) S_rk')
+title('Eq. (7) S_rk')
 imagesc(Result)
 colormap(gray)
