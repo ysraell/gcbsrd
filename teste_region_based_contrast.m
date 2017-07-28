@@ -9,7 +9,7 @@ K = 85;
 % m nearest neighbors (eq. (4), m = M)
 M = round(K/4);
 %sigma_s is the spatial distance weighting (eq. (7))
-sigma_s = sqrt(0.4);
+sigma_s = 10;
 
 % With segmentation from http://cs.brown.edu/~pff/segment/
 % command_srt = ['./segment/segment ' num2str(sigma_seg) num2str(K_seg) num2str(min_seg) 'Smap.ppm Smap_seg.ppm'];
@@ -233,7 +233,7 @@ for rk=1:T_r
         end
     end
 end
-
+ws(T_r)=1;
 
 % Calulating eq. (5)
 Sr = zeros(T_r,1);
@@ -261,18 +261,19 @@ colormap(gray)
 %eq. (7)
 
 Sr = zeros(T_r,1);
-wr = wr./sum(wr);
+%wr = wr./sum(wr);
 for rk=1:T_r
     for ri=1:T_r
         if ri~=rk
             Sr(rk) = Sr(rk)+exp(-Ds(rk,ri)/(sigma_s^2))*wr(ri)*Dr(rk,ri);
+%             [Sr(rk) Ds(rk,ri) exp(-Ds(rk,ri)/1000) wr(ri) Dr(rk,ri)]
         end
     end
     Sr(rk) = ws(rk)*Sr(rk);
 end
 
 Result = zeros(ll,cc);
-for r=1:T_r
+for r=1:T_r 
     Result=Result+ double(Segs(:,:,r)).*floor(Sr(r));
 end
 
