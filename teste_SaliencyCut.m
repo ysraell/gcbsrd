@@ -16,12 +16,15 @@ sigma_s = 10;
 
 % With segmentation from http://cs.brown.edu/~pff/segment/
 % command_srt = ['./segment/segment ' num2str(sigma_seg) num2str(K_seg) num2str(min_seg) 'Smap.ppm Smap_seg.ppm'];
-sigma_seg = 3; % choose sigma <5
+sigma_seg = 2; % choose sigma <5
 K_seg = 1000; % choose <1000
 min_seg = 100; %choose I dont know!
 
 % At final, cut the background regions (or try it)
 threshold_final_cut = 0.8;
+
+%show parcial pics?
+pimage = 0;
 
 % original image
 img = imread('Imgs/818.jpg');
@@ -61,10 +64,12 @@ for l=1:K
 end
 
 SI = reshape(Sc(idx),ll,cc); 
-figure;
-imagesc(SI)
-colormap(gray)
-title('Without Color space Smoothing')
+if pimage
+    figure;
+    imagesc(SI)
+    colormap(gray)
+    title('Without Color space Smoothing')
+end
 
 % To achive the m nearest color, first we most know the all distances.
 Dlab = zeros(K,K);
@@ -98,11 +103,12 @@ end
 
 
 SI = reshape(Sc2(idx),ll,cc); 
-
-figure;
-imagesc(SI)
-colormap(gray)
-title('With Color space Smoothing')
+if pimage
+    figure;
+    imagesc(SI)
+    colormap(gray)
+    title('With Color space Smoothing')
+end
 
 SInorm = normalizar(SI);
 addpath ./coherenceFilter
@@ -134,10 +140,12 @@ Options.verbose = 'none';
 %Smap = CoherenceFilter(SInorm,Options);
 Smap = CoherenceFilter(SInorm,struct('T',5,'rho',.5,'Scheme','R','verbose','none'));
 
-figure;
-imagesc(Smap)
-colormap(gray)
-title('After a coherence filter.')
+if pimage
+    figure;
+    imagesc(Smap)
+    colormap(gray)
+    title('After a coherence filter.')
+end
 
 addpath ./segment
 %usage: ./segment sigma k min input(ppm) output(ppm)
@@ -148,10 +156,12 @@ system(command_srt);
 
 Smap_seg = rgb2gray(imread('Smap_seg.ppm'));
 % 
-figure;
-imagesc(Smap_seg)
-colormap(gray)
-title('After graph segmentation.')
+if pimage
+    figure;
+    imagesc(Smap_seg)
+    colormap(gray)
+    title('After graph segmentation.')
+end
 
 
 values_r = unique(Smap_seg);
@@ -164,7 +174,14 @@ wr = zeros(T_r,1);
 for r=1:T_r
     Segs(:,:,r) = uint8(Smap_seg==values_r(r));
     wr(r) = sum(sum(Segs(:,:,r)));
-%     
+    
+    
+%     pause
+%     figure;
+%     title('After graph segmentation.')
+%     imagesc(Segs(:,:,r))
+%     colormap(gray)
+% %     
 %     B = bwboundaries(255-Segs(:,:,r).*255);
 %     
 %     pause
@@ -233,13 +250,28 @@ for rk=1:T_r
             end
             Ds(rk,ri) = norm(Cr{1}-Cr{2});
             Ds(ri,rk) = Ds(rk,ri);
-            dk = norm((Cr{1}-[l/2 c/2])./[l c]);
-            ws(rk) = exp(-9*dk^2);
             
+        else
+
+            sl =0;
+            tl=0;
+            sc = 0;
+            tc =0;
+            for l=1:ll
+                for c=1:cc
+                    sl=sl+l.*double(Segs(l,c,rk));
+                    tl = tl+double(Segs(l,c,rk));
+                    sc=sc+c.*double(Segs(l,c,rk));
+                    tc = tc+double(Segs(l,c,rk));
+                end
+            end             
+            Cr = [sl/tl sc/tc];
+            dk = norm((Cr-[l/2 c/2])./[l c]);
+            ws(rk) = exp(-9*dk^2);            
         end
     end
 end
-ws(T_r)=1;
+
 
 % Calulating eq. (5)
 Sr = zeros(T_r,1);
@@ -252,41 +284,43 @@ for rk=1:T_r
     end
 end
 
-Result = zeros(ll,cc);
+Result_seg = zeros(ll,cc);
 for r=1:T_r
-    Result=Result+ double(Segs(:,:,r)).*floor(Sr(r));
+    Result_seg=Result_seg+ double(Segs(:,:,r)).*floor(Sr(r));
 end
 
-
-figure;
-imagesc(Result)
-colormap(gray)
-title('Eq. (5) S_rk')
+if pimage
+    figure;
+    imagesc(Result_seg)
+    colormap(gray)
+    title('Eq. (5) S_rk')
+end
 
 %eq. (7)
 
-Sr = zeros(T_r,1);
+Srk = zeros(T_r,1);
 %wr = wr./sum(wr);
 for rk=1:T_r
     for ri=1:T_r
         if ri~=rk
-            Sr(rk) = Sr(rk)+exp(-Ds(rk,ri)/(sigma_s^2))*wr(ri)*Dr(rk,ri);
+            Srk(rk) = Srk(rk)+exp(-Ds(rk,ri)/(sigma_s^2))*wr(ri)*Dr(rk,ri);
 %             [Sr(rk) Ds(rk,ri) exp(-Ds(rk,ri)/1000) wr(ri) Dr(rk,ri)]
         end
     end
-    Sr(rk) = ws(rk)*Sr(rk);
+    Srk(rk) = ws(rk)*Srk(rk);
 end
 
 Result = zeros(ll,cc);
 for r=1:T_r 
-    Result=Result+ double(Segs(:,:,r)).*floor(Sr(r));
+    Result=Result+ double(Segs(:,:,r)).*floor(Srk(r));
 end
 
-
-figure;
-imagesc(Result)
-colormap(gray)
-title('Eq. (7) S_rk')
+if pimage
+    figure;
+    imagesc(Result)
+    colormap(gray)
+    title('Eq. (7) S_rk')
+end
 
 % Just do a threshold
 Trh = max(Result(:));
@@ -305,7 +339,7 @@ R_trh = uint8(Result>threshold_final_cut*Trh);
 % colormap(gray)
 
 gtr_bin = gtr/255;
-err = abs(R_trh-gtr_bin);
+err = abs(double(R_trh)-double(gtr_bin));
 
 figure;
 subplot(2,2,1)
