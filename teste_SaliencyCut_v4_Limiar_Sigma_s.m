@@ -3,7 +3,7 @@ close all
 clc
 
 tic;
-load teste_seg_gerado
+load teste_seg_gerado_ok
 
 %sigma_s is the spatial distance weighting (eq. (7))
 %sigma_s = [0.1:0.1:20];
@@ -151,8 +151,10 @@ end
 gtr_bin = gtr/255;
 T_T = max(size(threshold_final_cut));
 T_S = max(size(sigma_s));
+err_p = zeros(T_T,T_S);
 err_n = zeros(T_T,T_S);
 err_s = zeros(T_T,T_S);
+normones = norm(ones(ll,cc));
 
 for s=1:T_S
     %eq. (7)
@@ -188,12 +190,13 @@ for s=1:T_S
     for t=1:T_T
         R_trh = uint8(Result>threshold_final_cut(t)*Trh);
         err = abs(double(R_trh)-double(gtr_bin));
-        err_n(t,s) = norm(err);
+        err_p(t,s) = 1-sum(err(:))/(ll*cc);
+        err_n(t,s) = norm(err)/normones;
         err_s(t,s) = (1-ssim(double(R_trh),double(gtr_bin)))/2;
     end
 end
-% err_n = normalizar(err_n);
-% err_s = normalizar(err_s);
+
+
 
 %% norm
 [tempv,temp] = min(err_n(:));
@@ -225,13 +228,13 @@ end
     end
     
     Trh = max(Result(:));
-    R_trh = uint8(Result>threshold_final_cut(t)*Trh);
-    err = abs(double(R_trh)-double(gtr_bin));
+    R_trh_n = uint8(Result>threshold_final_cut(t)*Trh);
+    Err_n = abs(double(R_trh_n)-double(gtr_bin));
 
 %% fig norm
 figure;
 subplot(2,2,1)
-imshow(R_trh.*255)
+imshow(R_trh_n.*255)
 colormap(gray)
 title('Our')
 subplot(2,2,2)
@@ -243,10 +246,10 @@ imshow(img)
 colormap(gray)
 title('Original image')
 subplot(2,2,4)
-imshow(err.*255)
+imshow(Err_n.*255)
 colormap(gray)
-temp = ['Error (Our - GndTr). Norm-2 = ' num2str(tempv)];
-title(temp)
+temp = ['Relative error $\|$Our - GndTr$|/\|1_{l \times c}\| =$ ' num2str(tempv)];
+title(temp,'Interpreter','LaTex')
 
 %% ssim
 [tempv,temp] = min(err_s(:));
@@ -278,14 +281,14 @@ title(temp)
     end
     
     Trh = max(Result(:));
-    R_trh = uint8(Result>threshold_final_cut(t)*Trh);
-    err = abs(double(R_trh)-double(gtr_bin));
+    R_trh_s = uint8(Result>threshold_final_cut(t)*Trh);
+    Err_s = abs(double(R_trh_s)-double(gtr_bin));
 
     
     %% fig ssim
 figure;
 subplot(2,2,1)
-imshow(R_trh.*255)
+imshow(R_trh_s.*255)
 colormap(gray)
 title('Our')
 subplot(2,2,2)
@@ -297,17 +300,76 @@ imshow(img)
 colormap(gray)
 title('Original image')
 subplot(2,2,4)
-imshow(err.*255)
+imshow(Err_s.*255)
 colormap(gray)
 temp = ['Error (Our - GndTr). SSIM = ' num2str(tempv)];
 title(temp)
 
-%%
+%% Presision
+[tempv,temp] = max(err_p(:));
+[t,s]=ind2sub(size(err_p),temp);
+
+%% Bloco
+    Srk = zeros(T_r,1);
+    %wr = wr./sum(wr);
+    for rk=1:T_r
+        for ri=1:T_r
+            if ri~=rk
+                Srk(rk) = Srk(rk)+exp(-Ds(rk,ri)/(sigma_s(s)^2))*wr(ri)*Dr(rk,ri);
+    %             [Sr(rk) Ds(rk,ri) exp(-Ds(rk,ri)/1000) wr(ri) Dr(rk,ri)]
+            end
+        end
+        Srk(rk) = ws(rk)*Srk(rk);
+    end
+
+    Result = zeros(ll,cc);
+    for r=1:T_r 
+        Result=Result+ double(Segs(:,:,r)).*floor(Srk(r));
+    end
+
+    if pimage
+        figure;
+        imagesc(Result)
+        colormap(gray)
+        title('Eq. (7) S_rk')
+    end
+    
+    Trh = max(Result(:));
+    R_trh_p = uint8(Result>threshold_final_cut(t)*Trh);
+    Err_p = abs(double(R_trh_p)-double(gtr_bin));
+
+    
+    %% fig ssim
 figure;
-mesh(sigma_s,threshold_final_cut,err_n)
+subplot(2,2,1)
+imshow(R_trh_p.*255)
+colormap(gray)
+title('Our')
+subplot(2,2,2)
+imshow(gtr)
+colormap(gray)
+title('Ground Truth')
+subplot(2,2,3)
+imshow(img)
+colormap(gray)
+title('Original image')
+subplot(2,2,4)
+imshow(Err_p.*255)
+colormap(gray)
+temp = ['Error (Our - GndTr). Precision = ' num2str(tempv)];
+title(temp)
+
+%%
+recall = 1-threshold_final_cut;
 
 figure;
-mesh(sigma_s,threshold_final_cut,err_s)
+mesh(sigma_s,recall,err_n)
+
+figure;
+mesh(sigma_s,recall,err_s)
+
+figure;
+mesh(sigma_s,recall,err_p)
 
 time =toc;
 
