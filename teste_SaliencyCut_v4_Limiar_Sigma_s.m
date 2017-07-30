@@ -3,11 +3,11 @@ close all
 clc
 
 tic;
-load teste_seg_gerado_ok
+load teste_seg_gerado
 
 %sigma_s is the spatial distance weighting (eq. (7))
 %sigma_s = [0.1:0.1:20];
-sigma_s = [0.1:0.1:20];
+sigma_s = [0.1 0.5 1:10];
 % At final, cut the background regions (or try it)
 %threshold_final_cut = [0.1:0.005:0.98]';
 

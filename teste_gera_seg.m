@@ -17,12 +17,14 @@ min_seg = 200; %choose I dont know!
 
 %show parcial pics?
 pimage = 1;
-
+listing = dir('Imgs/*.jpg');
+N = size(listing,1);
+filename = ['Imgs/' listing(2).name];
 % original image
-img = imread('Imgs/818.jpg');
+img = imread(filename);
 % ground truth, to compare
-gtr = imread('Imgs/818.png');
-
+filename = [filename(1:end-3) 'png'];
+gtr = imread(filename);
 % distance metric between pixels (or colors)
 % simple L-2:
 % D= @(a,b) norm(a-b);
