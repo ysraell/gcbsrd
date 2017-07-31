@@ -20,4 +20,8 @@ disp([mean(P) std(P) min(P) max(P)])
 disp([mean(R) std(R) min(R) max(R)])
 
 
-save results_gera_seg.mat
+save results_gera_seg_FullDB.mat
+
+disp('poweroff')
+pause(60)
+system('poweroff')
